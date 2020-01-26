@@ -18,18 +18,19 @@ pub struct PositionOnMap{
 pub struct Snake{
     segments: LinkedList<PositionOnMap>,
     direction: String,
+    new_direction: String,
 }
 
 impl Snake{
     fn new_poss(pos_x: i32, pos_y: i32) -> ggez::GameResult<Snake>{
         let mut snake = LinkedList::new();
         snake.push_back(PositionOnMap{pos_x: pos_x, pos_y: pos_y});
-        let s = Snake{segments: snake, direction: "RIGHT".to_string()};
+        let s = Snake{segments: snake, direction: "RIGHT".to_string(), new_direction: "RIGHT".to_string()};
         Ok(s)
     }
 
     fn new_snake(snake: LinkedList<PositionOnMap>) -> ggez::GameResult<Snake>{
-        let s = Snake{segments: snake, direction: "RIGHT".to_string()};
+        let s = Snake{segments: snake, direction: "RIGHT".to_string(), new_direction: "RIGHT".to_string()};
         Ok(s)
     }
 
@@ -49,11 +50,11 @@ impl Snake{
         Ok(())
     }
 
-    fn opposite_direction(&mut self, new_direction: &String) -> bool{
-        (self.direction == "UP" && new_direction == "DOWN") || 
-        (self.direction == "LEFT" && new_direction == "RIGHT") || 
-        (self.direction == "DOWN" && new_direction == "UP") ||
-        (self.direction == "RIGHT" && new_direction == "LEFT")
+    fn opposite_direction(&mut self) -> bool{
+        (self.direction == "UP" && self.new_direction == "DOWN") || 
+        (self.direction == "LEFT" && self.new_direction == "RIGHT") || 
+        (self.direction == "DOWN" && self.new_direction == "UP") ||
+        (self.direction == "RIGHT" && self.new_direction == "LEFT")
     }
 }
 
@@ -81,6 +82,9 @@ impl MainState{
 impl event::EventHandler for MainState{
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
         if time::Instant::now() - self.last_update >= time::Duration::from_millis(ROUND_TIME){
+            if self.snake.new_direction != self.snake.direction && !self.snake.opposite_direction(){
+                self.snake.direction = self.snake.new_direction.clone();
+            }
             let head = self.snake.segments.front().unwrap();
             let mut new_x: i32 = head.pos_x;
             let mut new_y: i32 = head.pos_y;
@@ -137,9 +141,10 @@ impl event::EventHandler for MainState{
                 event::KeyCode::D => "RIGHT".to_string(),
                 _ => self.snake.direction.clone(),
             };
-            if new_direction != self.snake.direction && !self.snake.opposite_direction(&new_direction){
-                self.snake.direction = new_direction;
-            }
+            self.snake.new_direction = new_direction;
+            // if new_direction != self.snake.direction && !self.snake.opposite_direction(&new_direction){
+            //     self.snake.direction = new_direction;
+            // }
         }
 }
 

@@ -1,5 +1,11 @@
+mod snake;
+mod position_on_map;
+
+use snake::Snake;
+use position_on_map::PositionOnMap;
+
 use ggez;
-use ggez::{event, graphics, input, nalgebra as na};
+use ggez::{event, graphics, nalgebra as na};
 use std::time;
 use std::collections::LinkedList;
 
@@ -8,59 +14,13 @@ const MAP_SIZE_Y: f32 = 400.0;
 const CELL_SIZE: i32 = 20;
 const START_POS_X: i32 = 0;
 const START_POS_Y: i32 = 0;
-const ROUND_TIME: u64 = 400;      //ms
+const ROUND_TIME: u64 = 500;      //ms
 
-pub struct PositionOnMap{
-    pos_x: i32,
-    pos_y: i32,
-}
-
-pub struct Snake{
-    segments: LinkedList<PositionOnMap>,
-    direction: String,
-    new_direction: String,
-}
-
-impl Snake{
-    fn new_poss(pos_x: i32, pos_y: i32) -> ggez::GameResult<Snake>{
-        let mut snake = LinkedList::new();
-        snake.push_back(PositionOnMap{pos_x: pos_x, pos_y: pos_y});
-        let s = Snake{segments: snake, direction: "RIGHT".to_string(), new_direction: "RIGHT".to_string()};
-        Ok(s)
-    }
-
-    fn new_snake(snake: LinkedList<PositionOnMap>) -> ggez::GameResult<Snake>{
-        let s = Snake{segments: snake, direction: "RIGHT".to_string(), new_direction: "RIGHT".to_string()};
-        Ok(s)
-    }
-
-    fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
-        for segment in self.segments.iter(){
-            let rect = graphics::Mesh::new_rectangle(
-                ctx,
-                graphics::DrawMode::fill(),
-                graphics::Rect::new(
-                    segment.pos_x as f32, 
-                    segment.pos_y as f32, 
-                    CELL_SIZE as f32, 
-                    CELL_SIZE as f32),
-                graphics::WHITE)?;
-            graphics::draw(ctx, &rect, (na::Point2::new(0.0, 0.0), ))?;
-        }
-        Ok(())
-    }
-
-    fn opposite_direction(&mut self) -> bool{
-        (self.direction == "UP" && self.new_direction == "DOWN") || 
-        (self.direction == "LEFT" && self.new_direction == "RIGHT") || 
-        (self.direction == "DOWN" && self.new_direction == "UP") ||
-        (self.direction == "RIGHT" && self.new_direction == "LEFT")
-    }
-}
 
 pub struct MainState{
     last_update: time::Instant,
     snake: Snake,
+    alive: bool,
 }
 
 impl MainState{
@@ -70,10 +30,12 @@ impl MainState{
         segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE, pos_y: pos_y});
         segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE * 2, pos_y: pos_y});
         segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE * 3, pos_y: pos_y});
+        segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE * 4, pos_y: pos_y});
         let sn = Snake::new_snake(segm)?;
         let s = MainState{
             last_update: time::Instant::now(),
             snake: sn,
+            alive: true,
         };
         Ok(s)
     }
@@ -81,49 +43,58 @@ impl MainState{
 
 impl event::EventHandler for MainState{
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
-        if time::Instant::now() - self.last_update >= time::Duration::from_millis(ROUND_TIME){
-            if self.snake.new_direction != self.snake.direction && !self.snake.opposite_direction(){
+
+        // If snake has collided with something, we change its color don't update its position
+        if !self.alive{
+            self.snake.col = [1.0, 0.0, 0.0, 1.0].into();
+        }
+
+        // Checking if enough time has passed since the last update
+        else if time::Instant::now() - self.last_update >= time::Duration::from_millis(ROUND_TIME){
+            // Checking if snake's new direction differs from its current direction
+            /*if self.snake.new_direction != self.snake.direction && !self.snake.opposite_direction(){
                 self.snake.direction = self.snake.new_direction.clone();
-            }
+            }*/
+            self.snake.direction = self.snake.new_direction.clone();
             let head = self.snake.segments.front().unwrap();
-            let mut new_x: i32 = head.pos_x;
-            let mut new_y: i32 = head.pos_y;
 
-            if self.snake.direction == "UP" && head.pos_y != 0{
-                new_y = head.pos_y - CELL_SIZE;
-            }
-            else if self.snake.direction == "DOWN" && head.pos_y != 400 - CELL_SIZE{
-                new_y = head.pos_y + CELL_SIZE;
-            }
-            else if self.snake.direction == "LEFT" && head.pos_x != 0{
-                new_x = head.pos_x - CELL_SIZE;
-            }
-            else if self.snake.direction == "RIGHT" && head.pos_x != 400 - CELL_SIZE{
-                new_x = head.pos_x + CELL_SIZE;
-            }
+            let new_x: i32 = match self.snake.direction.as_str(){
+                "LEFT" => head.pos_x - CELL_SIZE,
+                "RIGHT" => head.pos_x + CELL_SIZE,
+                _ => head.pos_x,
+            };
 
-            if new_x != head.pos_x || new_y != head.pos_y{
-               // println!("{}, {}", new_x, new_y);
-                self.snake.segments.push_front(PositionOnMap{pos_x: new_x, pos_y: new_y});
-                self.snake.segments.pop_back();
-               // println!("CHANGED");
-            }
-            
-            let head = self.snake.segments.front().unwrap();
-            self.last_update = time::Instant::now();
+            let new_y: i32 = match self.snake.direction.as_str(){
+                "UP" => head.pos_y - CELL_SIZE,
+                "DOWN" => head.pos_y + CELL_SIZE,
+                _ => head.pos_y,
+            };
+
             print!("Head: {}, {}; time elapsed: {}; Segmenty:", head.pos_x, head.pos_y, self.last_update.elapsed().as_millis());
             for segment in self.snake.segments.iter(){
-                print!("{}, {}; ", segment.pos_x, segment.pos_y);
+                 print!("{}, {}; ", segment.pos_x, segment.pos_y);
             }
             println!("");
+
+            if new_x != head.pos_x || new_y != head.pos_y{              // Checking if the snake has moved
+                let new_pos = PositionOnMap{pos_x: new_x, pos_y: new_y}; 
+                self.snake.segments.pop_back();             // Moving the snake  
+                self.snake.segments.push_front(new_pos); 
+                println!("{}", self.snake.collide());
+                if self.snake.collide(){    // Checking if the snake collided
+                    self.alive = false;
+                    return Ok(());
+                }    
+            }
+            
+            self.last_update = time::Instant::now();
         }
         Ok(())
-        
     }
     
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult {
         graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
-        self.snake.draw(ctx)?;
+        self.snake.draw(ctx, self.snake.col)?;
         graphics::present(ctx)?;
         Ok(())
     }
@@ -141,10 +112,9 @@ impl event::EventHandler for MainState{
                 event::KeyCode::D => "RIGHT".to_string(),
                 _ => self.snake.direction.clone(),
             };
-            self.snake.new_direction = new_direction;
-            // if new_direction != self.snake.direction && !self.snake.opposite_direction(&new_direction){
-            //     self.snake.direction = new_direction;
-            // }
+            if !self.snake.opposite_direction_to(&new_direction){
+                self.snake.new_direction = new_direction;
+            }   
         }
 }
 

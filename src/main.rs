@@ -1,26 +1,40 @@
 mod snake;
 mod position_on_map;
+mod food;
+mod items;
 
 use snake::Snake;
 use position_on_map::PositionOnMap;
+use food::Food;
+use items::PickUp;
+use rand::distributions::{Uniform, Distribution};
 
 use ggez;
-use ggez::{event, graphics, nalgebra as na};
+use ggez::{event, graphics, nalgebra as na, input};
 use std::time;
 use std::collections::LinkedList;
+use std::path;
 
 const MAP_SIZE_X: f32 = 400.0;
 const MAP_SIZE_Y: f32 = 400.0;
-const CELL_SIZE: i32 = 20;
-const START_POS_X: i32 = 0;
-const START_POS_Y: i32 = 0;
-const ROUND_TIME: u64 = 500;      //ms
+const CELL_SIZE: i32 = 40;
+const START_POS_X: i32 = 40;
+const START_POS_Y: i32 = 40;
+//const ROUND_TIME: u64 = 500;      //ms
 
 
 pub struct MainState{
     last_update: time::Instant,
+    last_pickup_update: time::Instant,
     snake: Snake,
     alive: bool,
+    food_cell: Option<Food>,
+    points: i32,
+    menu: bool,
+    round_time: u64,               
+    main_round_time: u64,           
+    pick_up: Option<PickUp>,
+    effect: String,
 }
 
 impl MainState{
@@ -32,31 +46,128 @@ impl MainState{
         segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE * 3, pos_y: pos_y});
         segm.push_front(PositionOnMap{pos_x: pos_x + CELL_SIZE * 4, pos_y: pos_y});
         let sn = Snake::new_snake(segm)?;
+        let mut f = Food::new_random();
+        while sn.collide_with_food(&f){
+            f = Food::new_random();
+        }
         let s = MainState{
             last_update: time::Instant::now(),
+            last_pickup_update: time::Instant::now(),
             snake: sn,
             alive: true,
+            food_cell: Some(f),
+            points: 0,
+            menu: true,
+            round_time: 500,
+            main_round_time: 500,
+            pick_up: None,
+            effect: "".to_string(),
         };
         Ok(s)
+    }
+
+    fn draw_grid(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
+        let mut i = 0.0; 
+        while i <= MAP_SIZE_Y{
+            let (start, end) = (na::Point2::new(0.0, i), na::Point2::new(MAP_SIZE_X, i));
+            let l = graphics::Mesh::new_line(ctx, &[start, end], 1.0, [0.0, 0.0, 0.0, 0.3].into())?;
+            graphics::draw(ctx, &l, (na::Point2::new(0.0, 0.0), ))?;
+            i += CELL_SIZE as f32;
+        }
+        i = 0.0;
+        while i <= MAP_SIZE_X{
+            let (start, end) = (na::Point2::new(i, 0.0), na::Point2::new(i, MAP_SIZE_X));
+            let l = graphics::Mesh::new_line(ctx, &[start, end], 1.0, [0.0, 0.0, 0.0, 0.3].into())?;
+            graphics::draw(ctx, &l, (na::Point2::new(0.0, 0.0), ))?;
+            i += CELL_SIZE as f32;
+        }
+        Ok(())
+    }
+
+    fn eat_food(&mut self){
+        self.points += 1;
+        if self.main_round_time >= 500{
+            self.main_round_time -= 20;
+        }
+        else if self.main_round_time >= 300{
+            self.main_round_time -= 10;
+        }
+       else if self.main_round_time >= 150{
+            self.main_round_time -= 5;
+        }
+
+        let mut new_food: Food = Food::new_random();
+        while self.snake.collide_with_food(&new_food){
+            new_food = Food::new_random();
+        }
+        self.food_cell = Some(new_food);
+    }
+
+    fn handle_pickup(&mut self){
+        if self.snake.get_head().unwrap() == self.pick_up.as_ref().unwrap().get_pos(){
+            if self.pick_up.as_ref().unwrap().get_type() == "SPEED"{
+                self.effect = "SPEED".to_string();
+                let step = Uniform::new(0, 50);
+                let mut rng = rand::thread_rng();
+            }
+            self.pick_up = None;
+            self.last_pickup_update = time::Instant::now();
+        }
+    }
+
+    fn create_pickup(&mut self){
+        if time::Instant::now() - self.last_pickup_update >= time::Duration::from_millis(4000){
+            println!("PICKUP");
+            let step = Uniform::new(0, 10);
+            let mut rng = rand::thread_rng();
+            if step.sample(&mut rng) == 1{
+                let mut new_pu: PickUp = PickUp::new_random();
+                while self.snake.collide_with_pickup(&new_pu)  && new_pu.get_pos() == self.food_cell.as_ref().unwrap().get_pos(){
+                    new_pu = PickUp::new_random();
+                }
+                self.pick_up = Some(new_pu);
+            }
+        }
     }
 }
 
 impl event::EventHandler for MainState{
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
 
-        // If snake has collided with something, we change its color don't update its position
-        if !self.alive{
+        if self.effect != "SPEED"{
+            self.round_time = self.main_round_time;
+        }
+
+        if self.menu{
+            if input::keyboard::is_key_pressed(ctx, event::KeyCode::Return){
+                self.menu = false;
+                self.last_pickup_update = time::Instant::now();
+            }
+        }
+
+        // If snake has collided with something, its color changes and its position is no longer being updated
+        else if !self.alive{
             self.snake.col = [1.0, 0.0, 0.0, 1.0].into();
+            // After pressing Space we create new MainState and overwrite current state's fields with new one's
+            if input::keyboard::is_key_pressed(ctx, event::KeyCode::Space){
+                let new_state = MainState::new(START_POS_X, START_POS_Y)?;
+                self.snake = new_state.snake;
+                self.round_time = new_state.round_time;
+                self.main_round_time = new_state.main_round_time;
+                self.points = new_state.points;
+                self.alive = true;
+                self.food_cell = new_state.food_cell;
+                self.menu = true;
+                self.effect = new_state.effect;
+                return Ok(());
+            }
         }
 
         // Checking if enough time has passed since the last update
-        else if time::Instant::now() - self.last_update >= time::Duration::from_millis(ROUND_TIME){
-            // Checking if snake's new direction differs from its current direction
-            /*if self.snake.new_direction != self.snake.direction && !self.snake.opposite_direction(){
-                self.snake.direction = self.snake.new_direction.clone();
-            }*/
+        else if time::Instant::now() - self.last_update >= time::Duration::from_millis(self.round_time){
+            println!("AAAAAAAAAAA");
             self.snake.direction = self.snake.new_direction.clone();
-            let head = self.snake.segments.front().unwrap();
+            let head = self.snake.get_head().unwrap();
 
             let new_x: i32 = match self.snake.direction.as_str(){
                 "LEFT" => head.pos_x - CELL_SIZE,
@@ -69,39 +180,69 @@ impl event::EventHandler for MainState{
                 "DOWN" => head.pos_y + CELL_SIZE,
                 _ => head.pos_y,
             };
-
-            print!("Head: {}, {}; time elapsed: {}; Segmenty:", head.pos_x, head.pos_y, self.last_update.elapsed().as_millis());
-            for segment in self.snake.segments.iter(){
-                 print!("{}, {}; ", segment.pos_x, segment.pos_y);
-            }
-            println!("");
-
-            if new_x != head.pos_x || new_y != head.pos_y{              // Checking if the snake has moved
+            println!("{}", self.last_pickup_update.elapsed().as_millis());
+            // Checking if the snake has moved
+            if new_x != head.pos_x || new_y != head.pos_y{
                 let new_pos = PositionOnMap{pos_x: new_x, pos_y: new_y}; 
-                self.snake.segments.pop_back();             // Moving the snake  
-                self.snake.segments.push_front(new_pos); 
-                println!("{}", self.snake.collide());
-                if self.snake.collide(){    // Checking if the snake collided
+                self.snake.move_head(new_pos);
+                
+                // If snake has eaten some food
+                if self.snake.get_head().unwrap() == self.food_cell.as_ref().unwrap().get_pos(){
+                    self.eat_food();
+                }
+                else{
+                    self.snake.move_tail();
+                }
+                
+                match &self.pick_up{
+                    Some(_) => self.handle_pickup(),
+                    None => self.create_pickup(),
+                }
+
+                // Checking if the snake has collided
+                if self.snake.collide(){
                     self.alive = false;
                     return Ok(());
                 }    
             }
-            
+            //println!("{}", self.last_update.elapsed().as_millis());
             self.last_update = time::Instant::now();
         }
         Ok(())
     }
     
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult {
-        graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
+        graphics::clear(ctx, [0.0, 0.1, 0.0, 0.5].into());
+        let background = graphics::Image::new(ctx, "/grass400x440.jpg").unwrap();
+        graphics::draw(ctx, &background, graphics::DrawParam::default())?;
+        self.draw_grid(ctx)?;
+
         self.snake.draw(ctx, self.snake.col)?;
+
+        let _ = match &self.food_cell{
+            Some(f) => f.draw(ctx),
+            None => Ok(()),
+        };
+
+        let down_bar = graphics::Mesh::new_rectangle(
+            ctx,
+            graphics::DrawMode::fill(),
+            graphics::Rect::new(0.0, MAP_SIZE_Y, MAP_SIZE_Y, CELL_SIZE as f32),
+            [0.0, 0.0, 0.0, 0.7].into())?;
+        graphics::draw(ctx, &down_bar, (na::Point2::new(0.0, 0.0), ))?;
+
+        let _ = match &self.pick_up{
+            Some(x) => x.draw(ctx),
+            None => Ok(()),
+        };
+
         graphics::present(ctx)?;
         Ok(())
     }
 
     fn key_down_event(
         &mut self, 
-        ctx: &mut ggez::Context, 
+        _ctx: &mut ggez::Context, 
         keycode: event::KeyCode, 
         _keymod: event::KeyMods,
         _repeat: bool){
@@ -119,9 +260,9 @@ impl event::EventHandler for MainState{
 }
 
 fn main() -> ggez::GameResult{
-    let cb = ggez::ContextBuilder::new("draw a line", "ggez");
+    let cb = ggez::ContextBuilder::new("draw a line", "ggez").add_resource_path(path::PathBuf::from("./resources"));
     let (ctx, event_loop) = &mut cb
-        .window_mode(ggez::conf::WindowMode::default().dimensions(MAP_SIZE_X, MAP_SIZE_Y))
+        .window_mode(ggez::conf::WindowMode::default().dimensions(MAP_SIZE_X, MAP_SIZE_Y + CELL_SIZE as f32))
         .build()?;
     let state = &mut MainState::new(START_POS_X, START_POS_Y)?;
     event::run(ctx, event_loop, state)

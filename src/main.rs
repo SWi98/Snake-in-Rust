@@ -20,6 +20,7 @@ const MAP_SIZE_Y: f32 = 400.0;
 const CELL_SIZE: i32 = 40;
 const START_POS_X: i32 = 40;
 const START_POS_Y: i32 = 40;
+const TEXT_COLOR: [f32; 4] = [1.0, 0.1, 0.1, 1.0];
 //const ROUND_TIME: u64 = 500;      //ms
 
 
@@ -35,6 +36,7 @@ pub struct MainState{
     main_round_time: u64,           
     pick_up: Option<PickUp>,
     effect: String,
+    text_location: f32,
 }
 
 impl MainState{
@@ -58,10 +60,11 @@ impl MainState{
             food_cell: Some(f),
             points: 0,
             menu: true,
-            round_time: 500,
+            round_time: 450,
             main_round_time: 500,
             pick_up: None,
             effect: "".to_string(),
+            text_location: CELL_SIZE as f32,
         };
         Ok(s)
     }
@@ -86,14 +89,14 @@ impl MainState{
 
     fn eat_food(&mut self){
         self.points += 1;
-        if self.main_round_time >= 500{
-            self.main_round_time -= 20;
+        if self.round_time >= 400{
+            self.round_time -= 15;
         }
-        else if self.main_round_time >= 300{
-            self.main_round_time -= 10;
+        else if self.round_time >= 350{
+            self.round_time -= 10;
         }
-       else if self.main_round_time >= 150{
-            self.main_round_time -= 5;
+        else if self.round_time >= 180{
+            self.round_time -= 5;
         }
 
         let mut new_food: Food = Food::new_random();
@@ -133,10 +136,6 @@ impl MainState{
 
 impl event::EventHandler for MainState{
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult{
-
-        if self.effect != "SPEED"{
-            self.round_time = self.main_round_time;
-        }
 
         if self.menu{
             if input::keyboard::is_key_pressed(ctx, event::KeyCode::Return){
@@ -194,10 +193,10 @@ impl event::EventHandler for MainState{
                     self.snake.move_tail();
                 }
                 
-                match &self.pick_up{
+               /* match &self.pick_up{
                     Some(_) => self.handle_pickup(),
                     None => self.create_pickup(),
-                }
+                }*/
 
                 // Checking if the snake has collided
                 if self.snake.collide(){
@@ -235,6 +234,27 @@ impl event::EventHandler for MainState{
             Some(x) => x.draw(ctx),
             None => Ok(()),
         };
+
+        let text_to_display: String;
+        if self.menu{
+            text_to_display = "PRESS ENTER TO START".to_string();
+            self.text_location = CELL_SIZE as f32;
+        }
+        else if !self.alive{
+            text_to_display = "PRESS SPACE TO RESTART".to_string();
+            self.text_location = CELL_SIZE as f32 / 2.0;
+        }
+        else{
+            text_to_display = "POINTS: ".to_string() + &self.points.to_string();
+            self.text_location = (3 * CELL_SIZE) as f32;
+        }
+        let text = graphics::Text::new(graphics::TextFragment{
+            text: text_to_display,
+            color: Some(TEXT_COLOR.into()),
+            font: Some(graphics::Font::default()),
+            scale: Some(graphics::Scale::uniform(29.0)),
+        });
+        graphics::draw(ctx, &text, (na::Point2::new(self.text_location, MAP_SIZE_Y + 2.0),))?;
 
         graphics::present(ctx)?;
         Ok(())

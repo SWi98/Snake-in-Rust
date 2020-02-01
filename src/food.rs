@@ -20,7 +20,7 @@ impl Food{
     }
 
     pub fn draw(&self, ctx: &mut ggez::Context) -> ggez::GameResult{
-        let rect = graphics::Mesh::new_rectangle(
+        /*let rect = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::fill(),
             graphics::Rect::new(
@@ -28,8 +28,10 @@ impl Food{
                 self.position.pos_y as f32,
                 CELL_SIZE as f32, 
                 CELL_SIZE as f32),
-            [1.0, 1.0, 0.0, 1.0].into())?;
-        graphics::draw(ctx, &rect, (na::Point2::new(0.0, 0.0),))?;
+            [1.0, 1.0, 0.0, 1.0].into())?;*/
+            
+        let coin = graphics::Image::new(ctx, "/coin40x40.png").unwrap();
+        graphics::draw(ctx, &coin, (na::Point2::new(self.position.pos_x as f32, self.position.pos_y as f32),))?;
         Ok(())
     }
 }

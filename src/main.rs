@@ -30,6 +30,7 @@ pub struct MainState{
     alive: bool,
     food_cell: Option<Food>,
     points: i32,
+    points_from_last_game: i32,
     menu: bool,
     round_time: u64,              
     pick_up: Option<PickUp>,
@@ -56,6 +57,7 @@ impl MainState{
             alive: true,
             food_cell: Some(f),
             points: 0,
+            points_from_last_game: 0,
             menu: true,
             round_time: ROUND_TIME,
             pick_up: None,
@@ -145,7 +147,9 @@ impl event::EventHandler for MainState{
             // After pressing Space we create new MainState and overwrite current state with the new one
             if input::keyboard::is_key_pressed(ctx, event::KeyCode::Space){
                 let new_state = MainState::new(START_POS_X, START_POS_Y)?;
+                let x = self.points;
                 *self = new_state;
+                self.points_from_last_game = x;
                 return Ok(());
             }
         }
@@ -220,6 +224,13 @@ impl event::EventHandler for MainState{
         }
         else if !self.alive{
             text_to_display = "PRESS SPACE TO RESTART".to_string();
+            let points_text = graphics::Text::new(graphics::TextFragment{
+                text: "SCORED POINTS: ".to_string() + &self.points_from_last_game.to_string(),
+                color: Some(graphics::WHITE),
+                font: Some(graphics::Font::default()),
+                scale: Some(graphics::Scale::uniform(38.0)),
+            });
+            graphics::draw(ctx, &points_text, (na::Point2::new(self.text_location - 4.0, MAP_SIZE_Y / 2.5),))?;
             self.text_location = CELL_SIZE as f32 / 2.0;
         }
         else{

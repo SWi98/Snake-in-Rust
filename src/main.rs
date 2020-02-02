@@ -1,13 +1,12 @@
-mod snake;
+mod snake_mod;
 mod position_on_map;
 mod food;
 mod items;
 
-use snake::Snake;
+use snake_mod::Snake;
 use position_on_map::PositionOnMap;
 use food::Food;
 use items::PickUp;
-use rand::distributions::{Uniform, Distribution};
 
 use ggez;
 use ggez::{event, graphics, nalgebra as na, input};
@@ -21,21 +20,19 @@ const CELL_SIZE: i32 = 40;
 const START_POS_X: i32 = 40;
 const START_POS_Y: i32 = 40;
 const TEXT_COLOR: [f32; 4] = [1.0, 0.1, 0.1, 1.0];
-//const ROUND_TIME: u64 = 500;      //ms
+const ROUND_TIME: u64 = 500;      //ms
 
 
 pub struct MainState{
     last_update: time::Instant,
-    last_pickup_update: time::Instant,
+    last_meal: i32,
     snake: Snake,
     alive: bool,
     food_cell: Option<Food>,
     points: i32,
     menu: bool,
-    round_time: u64,               
-    main_round_time: u64,           
+    round_time: u64,              
     pick_up: Option<PickUp>,
-    effect: String,
     text_location: f32,
 }
 
@@ -54,16 +51,14 @@ impl MainState{
         }
         let s = MainState{
             last_update: time::Instant::now(),
-            last_pickup_update: time::Instant::now(),
+            last_meal: 0,
             snake: sn,
             alive: true,
             food_cell: Some(f),
             points: 0,
             menu: true,
-            round_time: 450,
-            main_round_time: 500,
+            round_time: ROUND_TIME,
             pick_up: None,
-            effect: "".to_string(),
             text_location: CELL_SIZE as f32,
         };
         Ok(s)
@@ -89,14 +84,15 @@ impl MainState{
 
     fn eat_food(&mut self){
         self.points += 1;
+        self.last_meal = 0;
         if self.round_time >= 400{
-            self.round_time -= 15;
+            self.round_time -= 20;
         }
         else if self.round_time >= 350{
-            self.round_time -= 10;
+            self.round_time -= 12;
         }
         else if self.round_time >= 180{
-            self.round_time -= 5;
+            self.round_time -= 8;
         }
 
         let mut new_food: Food = Food::new_random();
@@ -106,7 +102,7 @@ impl MainState{
         self.food_cell = Some(new_food);
     }
 
-    fn handle_pickup(&mut self){
+  /*  fn handle_pickup(&mut self){
         if self.snake.get_head().unwrap() == self.pick_up.as_ref().unwrap().get_pos(){
             if self.pick_up.as_ref().unwrap().get_type() == "SPEED"{
                 self.effect = "SPEED".to_string();
@@ -131,7 +127,7 @@ impl MainState{
                 self.pick_up = Some(new_pu);
             }
         }
-    }
+    }*/
 }
 
 impl event::EventHandler for MainState{
@@ -140,31 +136,22 @@ impl event::EventHandler for MainState{
         if self.menu{
             if input::keyboard::is_key_pressed(ctx, event::KeyCode::Return){
                 self.menu = false;
-                self.last_pickup_update = time::Instant::now();
             }
         }
 
         // If snake has collided with something, its color changes and its position is no longer being updated
         else if !self.alive{
             self.snake.col = [1.0, 0.0, 0.0, 1.0].into();
-            // After pressing Space we create new MainState and overwrite current state's fields with new one's
+            // After pressing Space we create new MainState and overwrite current state with the new one
             if input::keyboard::is_key_pressed(ctx, event::KeyCode::Space){
                 let new_state = MainState::new(START_POS_X, START_POS_Y)?;
-                self.snake = new_state.snake;
-                self.round_time = new_state.round_time;
-                self.main_round_time = new_state.main_round_time;
-                self.points = new_state.points;
-                self.alive = true;
-                self.food_cell = new_state.food_cell;
-                self.menu = true;
-                self.effect = new_state.effect;
+                *self = new_state;
                 return Ok(());
             }
         }
 
         // Checking if enough time has passed since the last update
         else if time::Instant::now() - self.last_update >= time::Duration::from_millis(self.round_time){
-            println!("AAAAAAAAAAA");
             self.snake.direction = self.snake.new_direction.clone();
             let head = self.snake.get_head().unwrap();
 
@@ -179,24 +166,20 @@ impl event::EventHandler for MainState{
                 "DOWN" => head.pos_y + CELL_SIZE,
                 _ => head.pos_y,
             };
-            println!("{}", self.last_pickup_update.elapsed().as_millis());
+
             // Checking if the snake has moved
             if new_x != head.pos_x || new_y != head.pos_y{
                 let new_pos = PositionOnMap{pos_x: new_x, pos_y: new_y}; 
                 self.snake.move_head(new_pos);
-                
+
                 // If snake has eaten some food
                 if self.snake.get_head().unwrap() == self.food_cell.as_ref().unwrap().get_pos(){
                     self.eat_food();
                 }
                 else{
                     self.snake.move_tail();
+                    self.last_meal += 1;
                 }
-                
-               /* match &self.pick_up{
-                    Some(_) => self.handle_pickup(),
-                    None => self.create_pickup(),
-                }*/
 
                 // Checking if the snake has collided
                 if self.snake.collide(){
@@ -204,7 +187,6 @@ impl event::EventHandler for MainState{
                     return Ok(());
                 }    
             }
-            //println!("{}", self.last_update.elapsed().as_millis());
             self.last_update = time::Instant::now();
         }
         Ok(())
@@ -215,14 +197,11 @@ impl event::EventHandler for MainState{
         let background = graphics::Image::new(ctx, "/grass400x440.jpg").unwrap();
         graphics::draw(ctx, &background, graphics::DrawParam::default())?;
         self.draw_grid(ctx)?;
-
-        self.snake.draw(ctx, self.snake.col)?;
-
+        self.snake.draw(ctx, self.last_meal)?;
         let _ = match &self.food_cell{
             Some(f) => f.draw(ctx),
             None => Ok(()),
         };
-
         let down_bar = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::fill(),
@@ -234,7 +213,6 @@ impl event::EventHandler for MainState{
             Some(x) => x.draw(ctx),
             None => Ok(()),
         };
-
         let text_to_display: String;
         if self.menu{
             text_to_display = "PRESS ENTER TO START".to_string();

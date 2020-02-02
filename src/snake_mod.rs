@@ -37,10 +37,6 @@ impl Snake{
         self.segments.contains(&new_food.get_pos())
     }
 
-    pub fn collide_with_pickup(&self, new_pickup: &PickUp) -> bool{
-        self.segments.contains(&new_pickup.get_pos())
-    }
-
     pub fn collide(&self) -> bool{
         let head: &PositionOnMap = self.segments.front().unwrap();
         if head.out_of_map(){
@@ -58,18 +54,31 @@ impl Snake{
         return false;
     }
 
-    pub fn draw(&mut self, ctx: &mut ggez::Context, col: graphics::Color) -> ggez::GameResult{
+    pub fn draw(&mut self, ctx: &mut ggez::Context, last_meal: i32) -> ggez::GameResult{
+        let head_pos = self.get_head().unwrap(); 
+        let head_image: graphics::Image;
+        if last_meal > 3{
+            head_image = graphics::Image::new(ctx, "/sad_head36x36.png").unwrap();
+        }
+        else{
+            head_image = graphics::Image::new(ctx, "/happy_head36x36.png").unwrap();
+        }
         for segment in self.segments.iter(){
-            let rect = graphics::Mesh::new_rectangle(
-                ctx,
-                graphics::DrawMode::fill(),
-                graphics::Rect::new(
-                    segment.pos_x as f32 + 2.0, 
-                    segment.pos_y as f32 + 2.0, 
-                    CELL_SIZE as f32 - 4.0, 
-                    CELL_SIZE as f32 - 4.0),
-                col)?;
-            graphics::draw(ctx, &rect, (na::Point2::new(0.0, 0.0), ))?;
+            if segment == head_pos{
+                graphics::draw(ctx, &head_image, (na::Point2::new(segment.pos_x as f32 + 2.0, segment.pos_y as f32 + 2.0), ))?;
+            }
+            else{
+                let rect = graphics::Mesh::new_rectangle(
+                    ctx,
+                    graphics::DrawMode::fill(),
+                    graphics::Rect::new(
+                        segment.pos_x as f32 + 2.0, 
+                        segment.pos_y as f32 + 2.0, 
+                        CELL_SIZE as f32 - 4.0, 
+                        CELL_SIZE as f32 - 4.0),
+                    self.col)?;
+                graphics::draw(ctx, &rect, (na::Point2::new(0.0, 0.0), ))?;
+            }
         }
         Ok(())
     }

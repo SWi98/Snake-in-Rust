@@ -2,7 +2,7 @@ use crate::position_on_map::PositionOnMap;
 use crate::ggez;
 use super::*;
 
-const EffectTypes: [&str; 1] = ["SPEED"];
+const EFFECT_TYPES: [&str; 1] = ["SPEED"];
 
 pub struct PickUp{
     position: PositionOnMap,
@@ -35,6 +35,6 @@ impl PickUp{
     }
 
     pub fn get_type(&self) -> &str{
-        EffectTypes[self.effect]
+        EFFECT_TYPES[self.effect]
     }
 }

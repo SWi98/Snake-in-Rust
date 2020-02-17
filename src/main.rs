@@ -6,7 +6,6 @@ mod items;
 use snake_mod::Snake;
 use position_on_map::PositionOnMap;
 use food::Food;
-use items::PickUp;
 
 use ggez;
 use ggez::{event, graphics, nalgebra as na, input};
@@ -30,10 +29,8 @@ pub struct MainState{
     alive: bool,
     food_cell: Option<Food>,
     points: i32,
-    points_from_last_game: i32,
     menu: bool,
-    round_time: u64,              
-    pick_up: Option<PickUp>,
+    round_time: u64,         
     text_location: f32,
 }
 
@@ -57,10 +54,8 @@ impl MainState{
             alive: true,
             food_cell: Some(f),
             points: 0,
-            points_from_last_game: 0,
             menu: true,
             round_time: ROUND_TIME,
-            pick_up: None,
             text_location: CELL_SIZE as f32,
         };
         Ok(s)
@@ -104,32 +99,6 @@ impl MainState{
         self.food_cell = Some(new_food);
     }
 
-  /*  fn handle_pickup(&mut self){
-        if self.snake.get_head().unwrap() == self.pick_up.as_ref().unwrap().get_pos(){
-            if self.pick_up.as_ref().unwrap().get_type() == "SPEED"{
-                self.effect = "SPEED".to_string();
-                let step = Uniform::new(0, 50);
-                let mut rng = rand::thread_rng();
-            }
-            self.pick_up = None;
-            self.last_pickup_update = time::Instant::now();
-        }
-    }
-
-    fn create_pickup(&mut self){
-        if time::Instant::now() - self.last_pickup_update >= time::Duration::from_millis(4000){
-            println!("PICKUP");
-            let step = Uniform::new(0, 10);
-            let mut rng = rand::thread_rng();
-            if step.sample(&mut rng) == 1{
-                let mut new_pu: PickUp = PickUp::new_random();
-                while self.snake.collide_with_pickup(&new_pu)  && new_pu.get_pos() == self.food_cell.as_ref().unwrap().get_pos(){
-                    new_pu = PickUp::new_random();
-                }
-                self.pick_up = Some(new_pu);
-            }
-        }
-    }*/
 }
 
 impl event::EventHandler for MainState{
@@ -147,9 +116,7 @@ impl event::EventHandler for MainState{
             // After pressing Space we create new MainState and overwrite current state with the new one
             if input::keyboard::is_key_pressed(ctx, event::KeyCode::Space){
                 let new_state = MainState::new(START_POS_X, START_POS_Y)?;
-                let x = self.points;
                 *self = new_state;
-                self.points_from_last_game = x;
                 return Ok(());
             }
         }
@@ -198,7 +165,7 @@ impl event::EventHandler for MainState{
     
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult {
         graphics::clear(ctx, [0.0, 0.1, 0.0, 0.5].into());
-        let background = graphics::Image::new(ctx, "/grass400x440.jpg").unwrap();
+        let background = graphics::Image::new(ctx, "/grass400x440.jpg").unwrap();   // zła praktyka
         graphics::draw(ctx, &background, graphics::DrawParam::default())?;
         self.draw_grid(ctx)?;
         self.snake.draw(ctx, self.last_meal)?;
@@ -213,10 +180,6 @@ impl event::EventHandler for MainState{
             [0.0, 0.0, 0.0, 0.7].into())?;
         graphics::draw(ctx, &down_bar, (na::Point2::new(0.0, 0.0), ))?;
 
-        let _ = match &self.pick_up{
-            Some(x) => x.draw(ctx),
-            None => Ok(()),
-        };
         let text_to_display: String;
         if self.menu{
             text_to_display = "PRESS ENTER TO START".to_string();
@@ -225,7 +188,7 @@ impl event::EventHandler for MainState{
         else if !self.alive{
             text_to_display = "PRESS SPACE TO RESTART".to_string();
             let points_text = graphics::Text::new(graphics::TextFragment{
-                text: "SCORED POINTS: ".to_string() + &self.points_from_last_game.to_string(),
+                text: "SCORED POINTS: ".to_string() + &self.points.to_string(),
                 color: Some(graphics::WHITE),
                 font: Some(graphics::Font::default()),
                 scale: Some(graphics::Scale::uniform(38.0)),

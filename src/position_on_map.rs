@@ -25,7 +25,6 @@ impl PositionOnMap{
 }
 
 impl PartialEq for PositionOnMap{
-
     fn eq(&self, other: &PositionOnMap) -> bool{
         self.pos_x == other.pos_x && self.pos_y == other.pos_y
     }
